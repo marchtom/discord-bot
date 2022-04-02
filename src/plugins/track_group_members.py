@@ -42,5 +42,5 @@ class TrackGroupMembers(MyClientPlugin):
         bot_msg = await msg.channel.send("Magiczny BOT sees this, working...")
         while not self.client.is_closed():
             await self.update_members(bot_msg, msg)
-            await asyncio.sleep(60)
+            await asyncio.sleep(SLEEP_TIME)
 
