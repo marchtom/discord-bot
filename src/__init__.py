@@ -52,6 +52,7 @@ class MyClient(discord.Client):
 def start():
     intents = discord.Intents.default()
     intents.members = True
+    intents.presences = True
     client = MyClient(intents=intents)
 
     client.run(SECRET)

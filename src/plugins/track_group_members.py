@@ -22,8 +22,18 @@ class TrackGroupMembers(MyClientPlugin):
         guild = bot_msg.guild
         for role in guild.roles:
             if role.name == msg.content.replace(f"{BOT_CALL} {self.name} ", ""):
-                msg_body_users = "\n".join(sorted([x.mention for x in role.members]))
-                msg_body = f"__Members of **{role.name}**:__\n\n{msg_body_users}"
+                online_cnt = 0
+                msg_body = f"__Members of **{role.name}**:__\n\n"
+
+                for m in role.members:
+                    if str(m.status) != 'offline':
+                        emoji = '🟢'
+                        online_cnt += 1
+                    else:
+                        emoji = '⚪'
+                    msg_body += f"{emoji} {m.mention}\n"
+                msg_body += f"\n__Online__: {online_cnt} / {len(role.members)}"
+
                 await bot_msg.edit(content=msg_body)
 
     async def async_bot_task(self, msg):
