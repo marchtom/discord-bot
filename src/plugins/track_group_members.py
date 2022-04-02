@@ -2,7 +2,7 @@ import asyncio
 import logging
 
 from .base import MyClientPlugin
-from settings import BOT_CALL
+from settings import BOT_CALL, SLEEP_TIME
 
 logger = logging.getLogger(__name__)
 
