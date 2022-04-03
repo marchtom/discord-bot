@@ -55,8 +55,18 @@ class TrackGroupMembers(MyClientPlugin):
                 self._setup_async_bot_task(bot_msg.id, role.id, bot_msg.channel.id, guild.id),
             )
 
-    async def process_reaction(self, *args, **kwargs):
-        pass
+    async def process_reaction(self, reaction):
+        print(f"got reaction: {reaction}")
+        if reaction.emoji.name == '🍆':
+            channel = self.client.get_channel(reaction.channel_id)
+            msg = await channel.fetch_message(reaction.message_id)
+            await msg.delete()
+
+            self.client.db.execute(
+                "DELETE FROM track_group_members WHERE message_id=?;",
+                (reaction.message_id,),
+            )
+            self.client.db.commit()
 
     async def initialize_after_restart(self):
         messages = self.client.db.execute("SELECT message_id, role_id, channel_id, guild_id FROM track_group_members;")
@@ -84,6 +94,7 @@ class TrackGroupMembers(MyClientPlugin):
             return
 
         last_msg = ''
+        safety_counter = 1
 
         while not self.client.is_closed():
             online_members = 0
@@ -115,6 +126,21 @@ class TrackGroupMembers(MyClientPlugin):
                     break
 
                 last_msg = new_msg
+
+            # safety check: once every 100 runs check if message still exists
+            if safety_counter % 100 == 0:
+                try:
+                    await channel.fetch_message(message_id)
+                except NotFound:
+                    logger.error("Meggage_ID: `%s` was removed, deleting from database.", message_id)
+                    self.client.db.execute(
+                        "DELETE FROM track_group_members WHERE message_id=?;",
+                        (message_id,),
+                    )
+                    self.client.db.commit()
+                break
+            else:
+                safety_counter += 1
 
             await asyncio.sleep(SLEEP_TIME)
 

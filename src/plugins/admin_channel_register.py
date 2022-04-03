@@ -21,12 +21,8 @@ class AdminChannel(MyClientPlugin):
         if self.channel:
             await self.channel.send(f"{msg}\n\n{msg.content}")
 
-    async def process_reaction(self, reaction):
-        print(f"got reaction: {reaction}")
-        if reaction.emoji.name == '🍆':
-            channel = self.client.get_channel(reaction.channel_id)
-            msg = await channel.fetch_message(reaction.message_id)
-            await msg.delete()
+    async def process_reaction(self, *args, **kwargs):
+        pass
 
     async def initialize_after_restart(self):
         pass
