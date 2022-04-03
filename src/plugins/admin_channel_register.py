@@ -1,6 +1,6 @@
 import logging
 
-from settings import BOT_CALL
+from src.settings import BOT_CALL
 from .base import MyClientPlugin
 
 logger = logging.getLogger(__name__)

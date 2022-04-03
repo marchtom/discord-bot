@@ -3,7 +3,7 @@ import logging
 
 import discord
 
-from settings import MY_ID, BOT_CALL, SECRET
+from src.settings import MY_ID, BOT_CALL, SECRET
 from .plugins.base import MyClientPlugin
 
 logger = logging.getLogger(__name__)
