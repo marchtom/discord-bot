@@ -1,5 +1,5 @@
-import asyncio
 import logging
+import sqlite3
 
 import discord
 
@@ -14,8 +14,7 @@ class MyClient(discord.Client):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.message = None
-        self.role = None
+        self.db = sqlite3.connect("discord_bot.db")
         self.__plugins = []
 
         for p in MyClientPlugin.__subclasses__():
@@ -25,6 +24,10 @@ class MyClient(discord.Client):
     async def on_ready(self):
         logger.info('Connected!')
         logger.info('Username: {0.name}\nID: {0.id}'.format(self.user))
+
+        # reinitialize plugins
+        for plugin in self.__plugins:
+            await plugin.initialize_after_restart()
 
     async def on_message(self, message):
         if message.author.id != MY_ID:

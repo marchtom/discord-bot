@@ -11,7 +11,6 @@ start-env: ## start new python env
 	python -m venv .venv
 	source .venv/bin/activate
 	pip install -r requirements.txt
-	pip install -e .
 .PHONY: start-env
 
 setup: requirements.txt ## install requirements

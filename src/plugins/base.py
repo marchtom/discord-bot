@@ -12,3 +12,7 @@ class MyClientPlugin(ABC):
     @abstractmethod
     async def process_reaction(self, reaction):
         ...
+
+    @abstractmethod
+    async def initialize_after_restart(self):
+        ...

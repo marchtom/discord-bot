@@ -28,3 +28,6 @@ class AdminChannel(MyClientPlugin):
             msg = await channel.fetch_message(reaction.message_id)
             await msg.delete()
 
+    async def initialize_after_restart(self):
+        pass
+
