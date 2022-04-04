@@ -16,16 +16,17 @@ class TrackGroupMembers(MyClientPlugin):
         super().__init__(*args, **kwargs)
 
         # initialize table for this plugin
-        self.client.db.execute("""
-            CREATE TABLE IF NOT EXISTS track_group_members (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                created_at DEFAULT (datetime('now', 'localtime')),
-                message_id INTEGER NOT NULL, -- bot message to edit
-                role_id INTEGER NOT NULL, -- tracked role
-                channel_id NOT NULL, -- channel where bot msg was posted
-                guild_id INTEGER NOT NULL -- guild/server owning channel
-            );
-        """)
+        with self.client.db.cursor() as cur:
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS track_group_members (
+                    id SERIAL PRIMARY KEY,
+                    created_at TIMESTAMP DEFAULT now(),
+                    message_id TEXT NOT NULL, -- bot message to edit
+                    role_id TEXT NOT NULL, -- tracked role
+                    channel_id TEXT NOT NULL, -- channel where bot msg was posted
+                    guild_id TEXT NOT NULL -- guild/server owning channel
+                );
+            """)
         self.client.db.commit()
 
 
@@ -45,10 +46,11 @@ class TrackGroupMembers(MyClientPlugin):
                 await bot_msg.edit(content=f"Magiczny BOT couldn't find role `{role_target}`")
                 return
 
-            self.client.db.execute(
-                "INSERT INTO track_group_members (message_id, role_id, channel_id, guild_id) VALUES (?, ?, ?, ?);",
-                (bot_msg.id, role.id, bot_msg.channel.id, guild.id),
-            )
+            with self.client.db.cursor() as cur:
+                cur.execute(
+                    "INSERT INTO track_group_members (message_id, role_id, channel_id, guild_id) VALUES (%s::TEXT, %s::TEXT, %s::TEXT, %s::TEXT);",
+                    (bot_msg.id, role.id, bot_msg.channel.id, guild.id),
+                )
             self.client.db.commit()
 
             await self.client.loop.create_task(
@@ -62,18 +64,23 @@ class TrackGroupMembers(MyClientPlugin):
             msg = await channel.fetch_message(reaction.message_id)
             await msg.delete()
 
-            self.client.db.execute(
-                "DELETE FROM track_group_members WHERE message_id=?;",
-                (reaction.message_id,),
-            )
+            with self.client.db.cursor() as cur:
+                cur.execute(
+                    "DELETE FROM track_group_members WHERE message_id=%s::TEXT;",
+                    (reaction.message_id,),
+                )
             self.client.db.commit()
 
     async def initialize_after_restart(self):
-        messages = self.client.db.execute("SELECT message_id, role_id, channel_id, guild_id FROM track_group_members;")
+        with self.client.db.cursor() as cur:
+            cur.execute("SELECT message_id, role_id, channel_id, guild_id FROM track_group_members;")
+            messages = cur.fetchall()
 
         for msg in messages:
             print(msg)
-            await self._setup_async_bot_task(msg[0], msg[1], msg[2], msg[3])
+            await self._setup_async_bot_task(
+                int(msg[0]), int(msg[1]), int(msg[2]), int(msg[3]),
+            )
 
     async def _setup_async_bot_task(self, message_id, role_id, channel_id, guild_id):
         await self.client.wait_until_ready()
@@ -85,11 +92,12 @@ class TrackGroupMembers(MyClientPlugin):
         try:
             msg = await channel.fetch_message(message_id)
         except NotFound:
-            logger.error("Meggage_ID: `%s` was removed, deleting from database.", message_id)
-            self.client.db.execute(
-                "DELETE FROM track_group_members WHERE message_id=?;",
-                (message_id,),
-            )
+            logger.error("Meggage_ID: `%s::TEXT` was removed, deleting from database.", message_id)
+            with self.client.db.cursor() as cur:
+                cur.execute(
+                    "DELETE FROM track_group_members WHERE message_id=%s::TEXT;",
+                    (message_id,),
+                )
             self.client.db.commit()
             return
 
@@ -117,11 +125,12 @@ class TrackGroupMembers(MyClientPlugin):
                 try:
                     await msg.edit(content=new_msg)
                 except NotFound:
-                    logger.error("Meggage_ID: `%s` was removed, deleting from database.", message_id)
-                    self.client.db.execute(
-                        "DELETE FROM track_group_members WHERE message_id=?;",
-                        (message_id,),
-                    )
+                    logger.error("Meggage_ID: `%s::TEXT` was removed, deleting from database.", message_id)
+                    with self.client.db.cursor() as cur:
+                        cur.execute(
+                            "DELETE FROM track_group_members WHERE message_id=%s::TEXT;",
+                            (message_id,),
+                        )
                     self.client.db.commit()
                     break
 
@@ -132,11 +141,12 @@ class TrackGroupMembers(MyClientPlugin):
                 try:
                     await channel.fetch_message(message_id)
                 except NotFound:
-                    logger.error("Meggage_ID: `%s` was removed, deleting from database.", message_id)
-                    self.client.db.execute(
-                        "DELETE FROM track_group_members WHERE message_id=?;",
-                        (message_id,),
-                    )
+                    logger.error("Meggage_ID: `%s::TEXT` was removed, deleting from database.", message_id)
+                    with self.client.db.cursor() as cur:
+                        cur.execute(
+                            "DELETE FROM track_group_members WHERE message_id=%s::TEXT;",
+                            (message_id,),
+                        )
                     self.client.db.commit()
                 break
             else:

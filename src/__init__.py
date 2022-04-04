@@ -1,9 +1,9 @@
 import logging
-import sqlite3
+import psycopg2
 
 import discord
 
-from src.settings import MY_ID, BOT_CALL, SECRET
+from src.settings import MY_ID, BOT_CALL, SECRET, DB_URL
 from .plugins.base import MyClientPlugin
 
 logger = logging.getLogger(__name__)
@@ -14,7 +14,7 @@ class MyClient(discord.Client):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.db = sqlite3.connect("discord_bot.db")
+        self.db = psycopg2.connect(DB_URL)
         self.__plugins = []
 
         for p in MyClientPlugin.__subclasses__():

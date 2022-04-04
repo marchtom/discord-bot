@@ -7,3 +7,4 @@ BOT_CALL = '!magiczny-bot'
 SLEEP_TIME = 5 #s
 MY_ID = int(os.getenv('MY_ID'))
 SECRET = os.getenv('SECRET')
+DB_URL = os.getenv('DB_URL')
