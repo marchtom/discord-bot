@@ -78,8 +78,10 @@ class TrackGroupMembers(MyClientPlugin):
 
         for msg in messages:
             print(msg)
-            await self._setup_async_bot_task(
-                int(msg[0]), int(msg[1]), int(msg[2]), int(msg[3]),
+            await self.client.loop.create_task(
+                await self._setup_async_bot_task(
+                    int(msg[0]), int(msg[1]), int(msg[2]), int(msg[3]),
+                )
             )
 
     async def _setup_async_bot_task(self, message_id, role_id, channel_id, guild_id):
