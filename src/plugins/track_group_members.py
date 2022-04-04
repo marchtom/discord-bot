@@ -79,7 +79,7 @@ class TrackGroupMembers(MyClientPlugin):
         for msg in messages:
             print(msg)
             await self.client.loop.create_task(
-                await self._setup_async_bot_task(
+                self._setup_async_bot_task(
                     int(msg[0]), int(msg[1]), int(msg[2]), int(msg[3]),
                 )
             )
