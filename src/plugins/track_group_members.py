@@ -75,14 +75,20 @@ class TrackGroupMembers(MyClientPlugin):
         with self.client.db.cursor() as cur:
             cur.execute("SELECT message_id, role_id, channel_id, guild_id FROM track_group_members;")
             messages = cur.fetchall()
+        
+        if not messages:
+            return
+        async_tasks = []
 
         for msg in messages:
-            print(msg)
-            await self.client.loop.create_task(
+            logger.info("Reinitializing `%s` message",msg)
+            async_tasks.append(self.client.loop.create_task(
                 self._setup_async_bot_task(
                     int(msg[0]), int(msg[1]), int(msg[2]), int(msg[3]),
                 )
-            )
+            ))
+
+        await asyncio.wait(async_tasks)
 
     async def _setup_async_bot_task(self, message_id, role_id, channel_id, guild_id):
         await self.client.wait_until_ready()
