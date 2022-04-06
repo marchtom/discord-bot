@@ -169,5 +169,5 @@ class TrackGroupMembers(MyClientPlugin):
 
                     await asyncio.sleep(SLEEP_TIME)
 
-                logger.info("Got signal: client is closed")
+            logger.info("Got signal: client is closed")
 
