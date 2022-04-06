@@ -14,6 +14,7 @@ class TrackGroupMembers(MyClientPlugin):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self._tasks = []
 
         # initialize table for this plugin
         with self.client.db.cursor() as cur:
@@ -53,9 +54,10 @@ class TrackGroupMembers(MyClientPlugin):
                 )
             self.client.db.commit()
 
-            await self.client.loop.create_task(
-                self._setup_async_bot_task(bot_msg.id, role.id, bot_msg.channel.id, guild.id),
-            )
+            task = self._setup_async_bot_task(bot_msg.id, role.id, bot_msg.channel.id, guild.id)
+            self._tasks.append(task)
+
+            await self.client.loop.create_task(task)
 
     async def process_reaction(self, reaction):
         print(f"got reaction: {reaction}")
@@ -87,6 +89,7 @@ class TrackGroupMembers(MyClientPlugin):
                     int(msg[0]), int(msg[1]), int(msg[2]), int(msg[3]),
                 )
             ))
+        self._tasks.extend(async_tasks)
 
         await asyncio.wait(async_tasks)
 
@@ -112,53 +115,59 @@ class TrackGroupMembers(MyClientPlugin):
         last_msg = ''
         safety_counter = 1
 
-        while not self.client.is_closed():
-            online_members = 0
-
-            msg_head_1 = f"__Members of **{role.name}**:__\n"
-            msg_body = ''
-
-            for m in role.members:
-                if str(m.status) != 'offline':
-                    emoji = '🟢'
-                    online_members += 1
-                else:
-                    emoji = '⚪'
-                msg_body += f"{emoji} {m.mention}\n"
-
-            msg_head_2 = f"__Online__: {online_members} / {len(role.members)}\n\n"
-            new_msg = msg_head_1 + msg_head_2 + msg_body
-
-            if new_msg != last_msg:
-                try:
-                    await msg.edit(content=new_msg)
-                except NotFound:
-                    logger.error("Meggage_ID: `%s::TEXT` was removed, deleting from database.", message_id)
-                    with self.client.db.cursor() as cur:
-                        cur.execute(
-                            "DELETE FROM track_group_members WHERE message_id=%s::TEXT;",
-                            (message_id,),
-                        )
-                    self.client.db.commit()
-                    break
-
-                last_msg = new_msg
-
-            # safety check: once every 100 runs check if message still exists
-            if safety_counter % 100 == 0:
-                try:
-                    await channel.fetch_message(message_id)
-                except NotFound:
-                    logger.error("Meggage_ID: `%s::TEXT` was removed, deleting from database.", message_id)
-                    with self.client.db.cursor() as cur:
-                        cur.execute(
-                            "DELETE FROM track_group_members WHERE message_id=%s::TEXT;",
-                            (message_id,),
-                        )
-                    self.client.db.commit()
-                break
+        while True:
+            if self.client.is_closed():
+                await asyncio.sleep(5*SLEEP_TIME)
             else:
-                safety_counter += 1
+                while not self.client.is_closed():
+                    online_members = 0
 
-            await asyncio.sleep(SLEEP_TIME)
+                    msg_head_1 = f"__Members of **{role.name}**:__\n"
+                    msg_body = ''
+
+                    for m in role.members:
+                        if str(m.status) != 'offline':
+                            emoji = '🟢'
+                            online_members += 1
+                        else:
+                            emoji = '⚪'
+                        msg_body += f"{emoji} {m.mention}\n"
+
+                    msg_head_2 = f"__Online__: {online_members} / {len(role.members)}\n\n"
+                    new_msg = msg_head_1 + msg_head_2 + msg_body
+
+                    if new_msg != last_msg:
+                        try:
+                            await msg.edit(content=new_msg)
+                        except NotFound:
+                            logger.error("Meggage_ID: `%s::TEXT` was removed, deleting from database.", message_id)
+                            with self.client.db.cursor() as cur:
+                                cur.execute(
+                                    "DELETE FROM track_group_members WHERE message_id=%s::TEXT;",
+                                    (message_id,),
+                                )
+                            self.client.db.commit()
+                            break
+
+                        last_msg = new_msg
+
+                    # safety check: once every 100 runs check if message still exists
+                    if safety_counter % 100 == 0:
+                        try:
+                            await channel.fetch_message(message_id)
+                        except NotFound:
+                            logger.error("Meggage_ID: `%s::TEXT` was removed, deleting from database.", message_id)
+                            with self.client.db.cursor() as cur:
+                                cur.execute(
+                                    "DELETE FROM track_group_members WHERE message_id=%s::TEXT;",
+                                    (message_id,),
+                                )
+                            self.client.db.commit()
+                        break
+                    else:
+                        safety_counter += 1
+
+                    await asyncio.sleep(SLEEP_TIME)
+
+                logger.info("Got signal: client is closed")
 
