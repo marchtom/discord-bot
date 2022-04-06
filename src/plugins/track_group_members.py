@@ -117,6 +117,7 @@ class TrackGroupMembers(MyClientPlugin):
 
         while True:
             if self.client.is_closed():
+                logger.info("Got signal: client is closed")
                 await asyncio.sleep(5*SLEEP_TIME)
             else:
                 while not self.client.is_closed():
@@ -169,5 +170,4 @@ class TrackGroupMembers(MyClientPlugin):
 
                     await asyncio.sleep(SLEEP_TIME)
 
-            logger.info("Got signal: client is closed")
 
