@@ -56,7 +56,7 @@ class MyClient(discord.Client):
             await p.process_message(message)
 
     async def on_raw_reaction_add(self, payload):
-        if payload.member.id in self._get_allowed_users():
+        if not payload.member.id in self._get_allowed_users():
             return
 
         await self.broadcast_reaction_add(payload)
