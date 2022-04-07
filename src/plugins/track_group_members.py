@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from cachetools.func import ttl_cache
 from discord.errors import NotFound
 from discord.utils import get
 
@@ -22,13 +23,35 @@ class TrackGroupMembers(MyClientPlugin):
                 CREATE TABLE IF NOT EXISTS track_group_members (
                     id SERIAL PRIMARY KEY,
                     created_at TIMESTAMP DEFAULT now(),
-                    message_id TEXT NOT NULL, -- bot message to edit
-                    role_id TEXT NOT NULL, -- tracked role
-                    channel_id TEXT NOT NULL, -- channel where bot msg was posted
-                    guild_id TEXT NOT NULL -- guild/server owning channel
+                    message_id BIGINT NOT NULL, -- bot message to edit
+                    role_id BIGINT NOT NULL, -- tracked role
+                    channel_id BIGINT NOT NULL, -- channel where bot msg was posted
+                    guild_id BIGINT NOT NULL -- guild/server owning channel
+                );
+
+                CREATE TABLE IF NOT EXISTS track_group_members_feats (
+                    id SERIAL PRIMARY KEY,
+                    created_at TIMESTAMP DEFAULT now(),
+                    role_id BIGINT NOT NULL, -- role enhanced with feat
+                    feat_role_id BIGINT NOT NULL, -- feat role
+                    feat_description TEXT NOT NULL -- symbolic description of feat
                 );
             """)
         self.client.db.commit()
+
+        self.HELP_MSG = f"""
+To start tracking role members:
+`{BOT_CALL} {self.name} init @<tracked-role-name>`
+
+Add Feat to tracked role:
+`{BOT_CALL} {self.name} add-feat @<tracked-role-name> @<feat-role-name> <text or emoji depicting feat>`
+
+Remove Feat from tracked role:
+`{BOT_CALL} {self.name} remove-feat @<tracked-role-name> @<feat-role-name>`
+
+List role's Feats:
+`{BOT_CALL} {self.name} list-feat @<tracked-role-name>`
+        """
 
 
     async def process_message(self, msg):
@@ -36,31 +59,94 @@ class TrackGroupMembers(MyClientPlugin):
             logger.info(f"TrackGroupMembers called >process_message<\n{msg}")
 
             bot_msg = await msg.channel.send("Magiczny BOT sees this, working...")
+            msg_content_parts = msg.content.replace(f"{BOT_CALL} {self.name} ", "").split()
             guild = msg.guild
-            role_target = msg.content.replace(f"{BOT_CALL} {self.name} ", "")
 
-            for role_check in guild.roles:
-                if role_check.name == role_target:
-                    role = role_check
-                    break
-            else:
-                await bot_msg.edit(content=f"Magiczny BOT couldn't find role `{role_target}`")
-                return
+            if msg_content_parts[0] == "help":
+                await bot_msg.edit(content=self.HELP_MSG)
 
-            with self.client.db.cursor() as cur:
-                cur.execute(
-                    "INSERT INTO track_group_members (message_id, role_id, channel_id, guild_id) VALUES (%s::TEXT, %s::TEXT, %s::TEXT, %s::TEXT);",
-                    (bot_msg.id, role.id, bot_msg.channel.id, guild.id),
+            elif msg_content_parts[0] == "init":
+                if len(msg.role_mentions) == 1:
+                    role = msg.role_mentions[0]
+                else:
+                    await bot_msg.edit(content="No valid role mentioned, exiting.")
+                    return
+                with self.client.db.cursor() as cur:
+                    cur.execute(
+                        "INSERT INTO track_group_members (message_id, role_id, channel_id, guild_id) VALUES (%s, %s, %s, %s);",
+                        (bot_msg.id, role.id, bot_msg.channel.id, guild.id),
+                    )
+                self.client.db.commit()
+
+                task = self._setup_async_bot_task(bot_msg.id, role.id, bot_msg.channel.id, guild.id)
+                self._tasks.append(task)
+
+                await self.client.loop.create_task(task)
+
+            elif msg_content_parts[0] == "add-feat":
+                if len(msg.role_mentions) == 2:
+                    role_tracked = msg.raw_role_mentions[0]
+                    role_feat = msg.raw_role_mentions[1]
+                else:
+                    await bot_msg.edit(content="No valid role mentioned, exiting.")
+                    return
+                if len(msg_content_parts) == 4:
+                    feat_description = msg_content_parts[3]
+                else:
+                    await bot_msg.edit(content="Invalid message, exiting.")
+                    return
+
+                with self.client.db.cursor() as cur:
+                    cur.execute(
+                        "INSERT INTO track_group_members_feats (role_id, feat_role_id, feat_description) VALUES (%s, %s, %s);",
+                        (role_tracked, role_feat, feat_description),
+                    )
+                self.client.db.commit()
+                await bot_msg.edit(
+                    content=f"Feat {get(guild.roles, id=role_feat).mention} ({feat_description}) added to role {get(guild.roles, id=role_tracked).mention}",
                 )
-            self.client.db.commit()
 
-            task = self._setup_async_bot_task(bot_msg.id, role.id, bot_msg.channel.id, guild.id)
-            self._tasks.append(task)
+            elif msg_content_parts[0] == "remove-feat":
+                if len(msg.role_mentions) == 2:
+                    role_tracked = msg.role_mentions[0]
+                    role_feat = msg.role_mentions[1]
+                else:
+                    await bot_msg.edit(content="No valid role mentioned, exiting.")
+                    return
 
-            await self.client.loop.create_task(task)
+                with self.client.db.cursor() as cur:
+                    cur.execute(
+                        "DELETE FROM track_group_members_feats WHERE role_id=%s AND feat_role_id=%s;",
+                        (role_tracked.id, role_feat.id),
+                    )
+                self.client.db.commit()
+                await bot_msg.edit(content=f"Feat {role_feat.mention} removed from role {role_tracked.mention}")
+
+            elif msg_content_parts[0] == "list-feat":
+                if len(msg.role_mentions) == 1:
+                    role_tracked = msg.role_mentions[0]
+                else:
+                    await bot_msg.edit(content="No valid role mentioned, exiting.")
+                    return
+
+                with self.client.db.cursor() as cur:
+                    cur.execute(
+                        """
+                        SELECT feat_role_id, feat_description
+                        FROM track_group_members_feats
+                        WHERE role_id=%s;
+                        """,
+                        (role_tracked.id,),
+                    )
+                    feats = cur.fetchall()
+                if feats:
+                    edited_msg = "\n".join([f"{get(guild.roles, id=x[0]).mention} ({x[1]})" for x in feats])
+                    await bot_msg.edit(content=edited_msg)
+                else:
+                    await bot_msg.edit(content=f"Role {role_tracked.mention} has no feats.")
 
     async def process_reaction(self, reaction):
-        print(f"got reaction: {reaction}")
+        logger.info(f"got reaction: {reaction}")
         if reaction.emoji.name == '🍆':
             channel = self.client.get_channel(reaction.channel_id)
             msg = await channel.fetch_message(reaction.message_id)
@@ -68,7 +154,7 @@ class TrackGroupMembers(MyClientPlugin):
 
             with self.client.db.cursor() as cur:
                 cur.execute(
-                    "DELETE FROM track_group_members WHERE message_id=%s::TEXT;",
+                    "DELETE FROM track_group_members WHERE message_id=%s;",
                     (reaction.message_id,),
                 )
             self.client.db.commit()
@@ -83,15 +169,72 @@ class TrackGroupMembers(MyClientPlugin):
         async_tasks = []
 
         for msg in messages:
-            logger.info("Reinitializing `%s` message",msg)
+            logger.info("Reinitializing `%s` message (message_id, role_id, channel_id, guild_id)", msg)
             async_tasks.append(self.client.loop.create_task(
                 self._setup_async_bot_task(
-                    int(msg[0]), int(msg[1]), int(msg[2]), int(msg[3]),
+                    msg[0], msg[1], msg[2], msg[3],
                 )
             ))
+            # sleep to avoid rate limitting from Discord API
+            await asyncio.sleep(0.2)
         self._tasks.extend(async_tasks)
 
         await asyncio.wait(async_tasks)
+
+    @ttl_cache(ttl=30*SLEEP_TIME)
+    def _get_member_feats(self, guild_id, role_id, member_id):
+        with self.client.db.cursor() as cur:
+            cur.execute("""
+                SELECT feat_role_id, feat_description
+                FROM track_group_members_feats
+                WHERE role_id=%s;
+            """, (role_id,))
+            role_feats = cur.fetchall()
+        guild = self.client.get_guild(guild_id)
+        member = guild.get_member(member_id)
+
+        feats = []
+        for role_feat_raw in role_feats:
+            role_feat = get(guild.roles, id=role_feat_raw[0])
+            if member in role_feat.members:
+                feats.append(role_feat_raw[1])
+        return feats
+
+    async def _refresh_track_message(self, guild, role, msg):
+        while not self.client.is_closed():
+            last_msg = ''
+            online_members = 0
+            msg_head_1 = f"__Members of **{role.name}**:__\n"
+            msg_body = ''
+
+            for m in role.members:
+                if str(m.status) != 'offline':
+                    status_emoji = '🟢'
+                    online_members += 1
+                else:
+                    status_emoji = '⚪'
+                msg_body += f"{status_emoji} {m.mention} {' '.join(self._get_member_feats(guild.id, role.id, m.id))}\n"
+
+            msg_head_2 = f"__Online__: {online_members} / {len(role.members)}\n\n"
+            new_msg = msg_head_1 + msg_head_2 + msg_body
+
+            if new_msg != last_msg:
+                try:
+                    await msg.edit(content=new_msg)
+                except NotFound:
+                    logger.error("Meggage_ID: `%s` was removed, deleting from database.", msg.id)
+                    with self.client.db.cursor() as cur:
+                        cur.execute(
+                            "DELETE FROM track_group_members WHERE message_id=%s;",
+                            (msg.id,),
+                        )
+                    self.client.db.commit()
+                    return True
+
+                last_msg = new_msg
+
+            await asyncio.sleep(SLEEP_TIME)
+            return False
 
     async def _setup_async_bot_task(self, message_id, role_id, channel_id, guild_id):
         await self.client.wait_until_ready()
@@ -103,71 +246,20 @@ class TrackGroupMembers(MyClientPlugin):
         try:
             msg = await channel.fetch_message(message_id)
         except NotFound:
-            logger.error("Meggage_ID: `%s::TEXT` was removed, deleting from database.", message_id)
+            logger.error("Meggage_ID: `%s` was removed, deleting from database.", message_id)
             with self.client.db.cursor() as cur:
                 cur.execute(
-                    "DELETE FROM track_group_members WHERE message_id=%s::TEXT;",
+                    "DELETE FROM track_group_members WHERE message_id=%s;",
                     (message_id,),
                 )
             self.client.db.commit()
             return
 
-        last_msg = ''
-        safety_counter = 1
-
-        while True:
+        exit_time = False
+        while True and not exit_time:
             if self.client.is_closed():
                 logger.info("Got signal: client is closed")
                 await asyncio.sleep(5*SLEEP_TIME)
             else:
-                while not self.client.is_closed():
-                    online_members = 0
-
-                    msg_head_1 = f"__Members of **{role.name}**:__\n"
-                    msg_body = ''
-
-                    for m in role.members:
-                        if str(m.status) != 'offline':
-                            emoji = '🟢'
-                            online_members += 1
-                        else:
-                            emoji = '⚪'
-                        msg_body += f"{emoji} {m.mention}\n"
-
-                    msg_head_2 = f"__Online__: {online_members} / {len(role.members)}\n\n"
-                    new_msg = msg_head_1 + msg_head_2 + msg_body
-
-                    if new_msg != last_msg:
-                        try:
-                            await msg.edit(content=new_msg)
-                        except NotFound:
-                            logger.error("Meggage_ID: `%s::TEXT` was removed, deleting from database.", message_id)
-                            with self.client.db.cursor() as cur:
-                                cur.execute(
-                                    "DELETE FROM track_group_members WHERE message_id=%s::TEXT;",
-                                    (message_id,),
-                                )
-                            self.client.db.commit()
-                            break
-
-                        last_msg = new_msg
-
-                    # safety check: once every 100 runs check if message still exists
-                    if safety_counter % 100 == 0:
-                        try:
-                            await channel.fetch_message(message_id)
-                        except NotFound:
-                            logger.error("Meggage_ID: `%s::TEXT` was removed, deleting from database.", message_id)
-                            with self.client.db.cursor() as cur:
-                                cur.execute(
-                                    "DELETE FROM track_group_members WHERE message_id=%s::TEXT;",
-                                    (message_id,),
-                                )
-                            self.client.db.commit()
-                        break
-                    else:
-                        safety_counter += 1
-
-                    await asyncio.sleep(SLEEP_TIME)
-
+                exit_time = await self._refresh_track_message(guild, role, msg)
 
