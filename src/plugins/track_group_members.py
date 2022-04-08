@@ -231,7 +231,7 @@ List role's Feats:
                         feats = ' '.join(feats_list)
                         msg_body_people.append(f"{status_emoji} {m.mention} {feats}")
 
-                    msg_body = "\n".join(sorted(msg_body_people))
+                    msg_body = "\n".join(sorted(msg_body_people)[::-1])
                     msg_head_2 = f"__Online__: {online_members} / {len(role.members)}\n\n"
                     new_msg = msg_head_1 + msg_head_2 + msg_body
 
