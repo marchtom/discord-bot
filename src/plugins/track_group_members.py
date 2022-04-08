@@ -11,6 +11,8 @@ from src.settings import BOT_CALL, SLEEP_TIME
 logger = logging.getLogger(__name__)
 
 
+FEAT_CACHE_TTL = 30*BOT_CALL
+
 class TrackGroupMembers(MyClientPlugin):
     name = 'track-group-members'
 
@@ -44,7 +46,7 @@ class TrackGroupMembers(MyClientPlugin):
 To start tracking role members:
 `{BOT_CALL} {self.name} init @<tracked-role-name>`
 Refresh time for members status: {BOT_CALL}s
-Refresh time for feats: {30*BOT_CALL}s
+Refresh time for feats: {FEAT_CACHE_TTL}s
 
 Add Feat to tracked role:
 `{BOT_CALL} {self.name} add-feat @<tracked-role-name> @<feat-role-name> <text or emoji depicting feat>`
@@ -184,7 +186,7 @@ List role's Feats:
 
         await asyncio.wait(async_tasks)
 
-    @ttl_cache(ttl=30*SLEEP_TIME)
+    @ttl_cache(ttl=FEAT_CACHE_TTL)
     def _get_member_feats(self, guild_id, role_id):
         with self.client.db.cursor() as cur:
             cur.execute("""
