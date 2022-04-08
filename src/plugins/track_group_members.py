@@ -209,42 +209,48 @@ List role's Feats:
         return feats
 
     async def _refresh_track_message(self, guild, role, msg):
-        while not self.client.is_closed():
-            last_msg = ''
-            online_members = 0
-            msg_head_1 = f"__Members of **{role.name}**:__\n"
-            msg_body = ''
+        exit_time = False
+        last_msg = ''
+        while True and not exit_time:
+            if self.client.is_closed():
+                logger.info("Got signal: client is closed")
+                await asyncio.sleep(5*SLEEP_TIME)
+            else:
+                while not self.client.is_closed():
+                    online_members = 0
+                    msg_head_1 = f"__Members of **{role.name}**:__\n"
 
-            for m in role.members:
-                if str(m.status) != 'offline':
-                    status_emoji = '🟢'
-                    online_members += 1
-                else:
-                    status_emoji = '⚪'
-                feats_list = self._get_member_feats(guild.id, role.id).get(m.id) or []
-                feats = ' '.join(feats_list)
-                msg_body += f"{status_emoji} {m.mention} {feats}\n"
+                    msg_body_people = []
+                    for m in role.members:
+                        if str(m.status) != 'offline':
+                            status_emoji = '🟢'
+                            online_members += 1
+                        else:
+                            status_emoji = '⚪'
+                        feats_list = self._get_member_feats(guild.id, role.id).get(m.id) or []
+                        feats = ' '.join(feats_list)
+                        msg_body_people.append(f"{status_emoji} {m.mention} {feats}")
 
-            msg_head_2 = f"__Online__: {online_members} / {len(role.members)}\n\n"
-            new_msg = msg_head_1 + msg_head_2 + msg_body
+                    msg_body = "\n".join(sorted(msg_body_people))
+                    msg_head_2 = f"__Online__: {online_members} / {len(role.members)}\n\n"
+                    new_msg = msg_head_1 + msg_head_2 + msg_body
 
-            if new_msg != last_msg:
-                try:
-                    await msg.edit(content=new_msg)
-                except NotFound:
-                    logger.error("Meggage_ID: `%s` was removed, deleting from database.", msg.id)
-                    with self.client.db.cursor() as cur:
-                        cur.execute(
-                            "DELETE FROM track_group_members WHERE message_id=%s;",
-                            (msg.id,),
-                        )
-                    self.client.db.commit()
-                    return True
+                    if new_msg != last_msg:
+                        try:
+                            await msg.edit(content=new_msg)
+                        except NotFound:
+                            logger.error("Meggage_ID: `%s` was removed, deleting from database.", msg.id)
+                            with self.client.db.cursor() as cur:
+                                cur.execute(
+                                    "DELETE FROM track_group_members WHERE message_id=%s;",
+                                    (msg.id,),
+                                )
+                            self.client.db.commit()
+                            exit_time = True
+                        last_msg = new_msg
 
-                last_msg = new_msg
-
-            await asyncio.sleep(SLEEP_TIME)
-            return False
+                    await asyncio.sleep(SLEEP_TIME)
+                    exit_time = False
 
     async def _setup_async_bot_task(self, message_id, role_id, channel_id, guild_id):
         await self.client.wait_until_ready()
@@ -265,11 +271,5 @@ List role's Feats:
             self.client.db.commit()
             return
 
-        exit_time = False
-        while True and not exit_time:
-            if self.client.is_closed():
-                logger.info("Got signal: client is closed")
-                await asyncio.sleep(5*SLEEP_TIME)
-            else:
-                exit_time = await self._refresh_track_message(guild, role, msg)
+        await self._refresh_track_message(guild, role, msg)
 
