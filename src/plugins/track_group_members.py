@@ -1,6 +1,7 @@
 import asyncio
 import logging
 from cachetools.func import ttl_cache
+from collections import defaultdict
 from discord.errors import NotFound
 from discord.utils import get
 
@@ -182,7 +183,7 @@ List role's Feats:
         await asyncio.wait(async_tasks)
 
     @ttl_cache(ttl=30*SLEEP_TIME)
-    def _get_member_feats(self, guild_id, role_id, member_id):
+    def _get_member_feats(self, guild_id, role_id):
         with self.client.db.cursor() as cur:
             cur.execute("""
                 SELECT feat_role_id, feat_description
@@ -191,13 +192,12 @@ List role's Feats:
             """, (role_id,))
             role_feats = cur.fetchall()
         guild = self.client.get_guild(guild_id)
-        member = guild.get_member(member_id)
 
-        feats = []
+        feats = defaultdict(list)
         for role_feat_raw in role_feats:
             role_feat = get(guild.roles, id=role_feat_raw[0])
-            if member in role_feat.members:
-                feats.append(role_feat_raw[1])
+            for member in role_feat.members:
+                feats[member.id].append(role_feat_raw[1])
         return feats
 
     async def _refresh_track_message(self, guild, role, msg):
@@ -213,7 +213,7 @@ List role's Feats:
                     online_members += 1
                 else:
                     status_emoji = '⚪'
-                msg_body += f"{status_emoji} {m.mention} {' '.join(self._get_member_feats(guild.id, role.id, m.id))}\n"
+                msg_body += f"{status_emoji} {m.mention} {' '.join(self._get_member_feats(guild.id, role.id).get(m.id))}\n"
 
             msg_head_2 = f"__Online__: {online_members} / {len(role.members)}\n\n"
             new_msg = msg_head_1 + msg_head_2 + msg_body
