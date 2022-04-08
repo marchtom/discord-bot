@@ -43,6 +43,8 @@ class TrackGroupMembers(MyClientPlugin):
         self.HELP_MSG = f"""
 To start tracking role members:
 `{BOT_CALL} {self.name} init @<tracked-role-name>`
+Refresh time for members status: {BOT_CALL}s
+Refresh time for feats: {30*BOT_CALL}s
 
 Add Feat to tracked role:
 `{BOT_CALL} {self.name} add-feat @<tracked-role-name> @<feat-role-name> <text or emoji depicting feat>`
