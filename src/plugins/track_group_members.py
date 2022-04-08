@@ -11,7 +11,7 @@ from src.settings import BOT_CALL, SLEEP_TIME
 logger = logging.getLogger(__name__)
 
 
-FEAT_CACHE_TTL = 30*BOT_CALL
+FEAT_CACHE_TTL = 30*SLEEP_TIME
 
 class TrackGroupMembers(MyClientPlugin):
     name = 'track-group-members'
