@@ -195,6 +195,10 @@ List role's Feats:
                 WHERE role_id=%s;
             """, (role_id,))
             role_feats = cur.fetchall()
+
+        if not role_feats:
+            return {}
+
         guild = self.client.get_guild(guild_id)
 
         feats = defaultdict(list)
@@ -217,7 +221,9 @@ List role's Feats:
                     online_members += 1
                 else:
                     status_emoji = '⚪'
-                msg_body += f"{status_emoji} {m.mention} {' '.join(self._get_member_feats(guild.id, role.id).get(m.id))}\n"
+                feats_list = self._get_member_feats(guild.id, role.id).get(m.id) or []
+                feats = ' '.join(feats_list)
+                msg_body += f"{status_emoji} {m.mention} {feats}\n"
 
             msg_head_2 = f"__Online__: {online_members} / {len(role.members)}\n\n"
             new_msg = msg_head_1 + msg_head_2 + msg_body
