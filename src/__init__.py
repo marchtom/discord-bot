@@ -44,8 +44,10 @@ class MyClient(discord.Client):
     async def on_message(self, message):
         if not message.content.startswith(BOT_CALL):
             return
-        print("author ID:", message.author.id)
-        print("allowed users:", self._get_allowed_users())
+        logger.info(
+            "author ID: %s\nallowed users: %s",
+            message.author.id, self._get_allowed_users(),
+        )
         if not message.author.id in self._get_allowed_users():
             return
 
